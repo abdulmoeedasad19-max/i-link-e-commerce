@@ -1,0 +1,795 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+// --- Auth.js (NextAuth v5) Prisma adapter models ---
+// Model/field names below follow the adapter's required schema exactly:
+// https://authjs.dev/getting-started/adapters/prisma
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  phone         String?
+  role          Role      @default(CUSTOMER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  addresses     Address[]
+  cartItems     CartItem[]
+  wishlistItems WishlistItem[]
+  orders        Order[]
+  quotations    Quotation[]
+  reviews       Review[]
+  activityLogs  ActivityLog[]
+  returnRequests ReturnRequest[]
+}
+
+model Account {
+  id                       String  @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String? @db.Text
+  access_token             String? @db.Text
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String? @db.Text
+  session_state            String?
+  refresh_token_expires_in Int?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- Customer addresses (Phase 2 Step 6) ---
+
+model Address {
+  id         String   @id @default(cuid())
+  userId     String
+  label      String
+  line1      String
+  line2      String?
+  city       String
+  province   String
+  postalCode String
+  phone      String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+}
+
+// --- Cart & wishlist synchronization (Phase 2 Step 7) ---
+// productId is a plain string referencing src/lib/products.ts — there is no
+// Product table yet, so it is intentionally not a foreign key.
+
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  quantity  Int
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+// --- Orders foundation (Phase 2 Step 8) ---
+// Order creation, checkout, and payments do not exist yet — this is only
+// the database foundation a future checkout step will write into.
+// OrderItem snapshots productSlug/nameSnapshot/priceSnapshot rather than
+// referencing src/lib/products.ts by id, so a historical order keeps
+// showing what was actually purchased even if a product's name or price
+// changes later.
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+// --- Payment method architecture (Phase 2 Step 13) ---
+// Selection only — no gateway integration, verification, or webhooks yet.
+// Every order's paymentStatus starts and stays PENDING in this step; only
+// a future payment-processing step may ever transition it.
+//
+// EASYPAISA added in Phase 4.4.14 — manual verification only (see Order.
+// transactionId/paidAt below and src/app/admin/orders/actions.ts's
+// confirmEasypaisaPayment). BANK_TRANSFER is left in place, unactivated in
+// checkout, solely because a real historical order already uses it.
+
+enum PaymentMethod {
+  COD
+  BANK_TRANSFER
+  EASYPAISA
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  userId            String
+  status            OrderStatus @default(PENDING)
+  subtotal          Decimal     @db.Decimal(12, 2)
+  total             Decimal     @db.Decimal(12, 2)
+  shippingAddressId String?
+  createdAt         DateTime    @default(now())
+
+  // Historical shipping snapshot (Phase 2 Step 12) — copied from the
+  // selected Address at the moment the order is placed, so a later edit or
+  // deletion of that Address can never change what a past order displays.
+  // Nullable because orders created before this migration have no
+  // snapshot; those fall back to the live shippingAddress relation. There
+  // is deliberately no shippingName field — Address itself has no name
+  // field to copy from.
+  shippingLabel      String?
+  shippingLine1      String?
+  shippingLine2      String?
+  shippingCity       String?
+  shippingProvince   String?
+  shippingPostalCode String?
+  shippingPhone      String?
+
+  // Payment method architecture (Phase 2 Step 13) — selection only, no
+  // gateway/verification. paymentStatus is always PENDING on creation.
+  paymentMethod PaymentMethod @default(COD)
+  paymentStatus PaymentStatus @default(PENDING)
+
+  // Manual Easypaisa verification (Phase 4.4.14). transactionId is the
+  // customer-submitted reference from their Easypaisa app — plain String,
+  // nullable (absent until submitted, and never populated for COD/
+  // BANK_TRANSFER orders). Deliberately no @unique: Easypaisa gives no
+  // uniqueness guarantee, and the spec explicitly calls out not inventing
+  // one. paidAt is set only by confirmEasypaisaPayment (or the existing
+  // generic updatePaymentStatus transition to PAID), never by the
+  // customer — it stays null for every order that isn't yet PAID.
+  transactionId String?
+  paidAt        DateTime?
+
+  // Manual refund workflow (Phase 4.4.15). Set only by the dedicated
+  // refundOrder admin action (src/app/admin/orders/actions.ts) when a PAID
+  // order transitions to REFUNDED — never by the customer, never on order
+  // creation, never on any other status change. This is intentionally the
+  // smallest possible structure: a full-refund record, not a partial-
+  // refund ledger (no refundAmount) and not a return/RMA system (no
+  // fulfillment-side OrderStatus change). refundReason is required by the
+  // action's own validation even though the column itself is nullable —
+  // nullable only because every pre-existing order predates this column.
+  refundReason String?
+  refundedAt   DateTime?
+
+  // Delivery timestamp (Phase 4.4.18) — set only by updateOrderStatus
+  // (src/app/admin/orders/actions.ts) the moment status transitions to
+  // DELIVERED, never by the customer, never on order creation. Added
+  // specifically so ReturnRequest's 7-day eligibility window has a real,
+  // reliable timestamp to compute from — Order previously had no field
+  // representing "when did this order reach the customer" at all (only
+  // createdAt, which is placement time, not delivery time). Mirrors
+  // paidAt/refundedAt's exact precedent: a status-transition timestamp,
+  // nullable because every pre-existing order predates this column and
+  // may never have gone through a logged DELIVERED transition.
+  deliveredAt DateTime?
+
+  // Coupon discount snapshot (Phase 4.3.10 — Stage B). Deliberately two
+  // plain nullable columns, not a Coupon relation: the Order must never
+  // depend on a Coupon row continuing to exist or remaining unchanged.
+  // discountCode is the normalized code that was actually applied;
+  // discountAmount is the exact Decimal amount actually deducted from
+  // subtotal at the moment this order was placed. Both stay null forever
+  // on an order that never had a coupon. See src/lib/coupon-checkout.ts.
+  discountCode   String?
+  discountAmount Decimal? @db.Decimal(12, 2)
+
+  // Shipping cost snapshot (Phase 4.4.8). Mirrors discountCode/
+  // discountAmount exactly: nullable because orders placed before this
+  // migration never had a configurable shipping cost to snapshot (their
+  // shipping really was 0, and stays displayed that way — see
+  // src/lib/coupon-checkout.ts and the order-detail pages). Copied onto
+  // the order at checkout from StoreSettings.shippingCost at that exact
+  // moment; never re-derived from the live StoreSettings row later, so a
+  // future admin edit to the shipping cost can never change what a past
+  // order displays or totals.
+  shippingAmount Decimal? @db.Decimal(12, 2)
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shippingAddress Address?        @relation(fields: [shippingAddressId], references: [id], onDelete: SetNull)
+  items           OrderItem[]
+  returnRequests  ReturnRequest[]
+
+  @@index([userId])
+  @@index([status])
+  // Phase 4.4.27 — src/lib/admin/orders.ts's getAdminOrders() filters the
+  // full Order table directly on both fields (paymentStatus/paymentMethod
+  // dropdowns on /admin/orders), with no other narrowing condition in that
+  // code path — the exact query shape that benefits from its own index,
+  // unlike the several other paymentStatus reads elsewhere in the app,
+  // which are all single-row lookups already scoped by the `id` primary
+  // key (paymentStatus there is just an extra race-safety condition on an
+  // already-located row, not something a table-wide index helps).
+  @@index([paymentStatus])
+  @@index([paymentMethod])
+}
+
+model OrderItem {
+  id            String  @id @default(cuid())
+  orderId       String
+  productSlug   String
+  nameSnapshot  String
+  priceSnapshot Decimal @db.Decimal(12, 2)
+  quantity      Int
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// --- Product catalog foundation (Phase 4.2.1) ---
+// Database models only — the storefront still reads from
+// src/lib/products.ts until a later phase switches it over.
+//
+// Product.id is a plain String with no @default(cuid()): when this catalog
+// is seeded, ids must be assigned explicitly as the existing "p1".."p48"
+// values from src/lib/products.ts, because CartItem.productId and
+// WishlistItem.productId already store those exact strings as plain
+// (non-FK) values. Preserving them avoids orphaning any existing cart or
+// wishlist row. OrderItem is intentionally given no relation to Product at
+// all — it already snapshots productSlug/nameSnapshot/priceSnapshot, so
+// historical orders stay accurate independent of anything below.
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum CategoryTier {
+  FEATURED
+  SECONDARY
+  COMPACT
+}
+
+model Category {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  description String?
+  image       String?
+  icon        String?
+  tier        CategoryTier @default(SECONDARY)
+  sortOrder   Int          @default(0)
+  parentId    String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryHierarchy")
+  products Product[]
+
+  @@index([parentId])
+}
+
+model Brand {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+}
+
+model Product {
+  id                String        @id
+  name              String
+  slug              String        @unique
+  sku               String?       @unique
+  description       String
+  price             Decimal       @db.Decimal(12, 2)
+  compareAtPrice    Decimal?      @db.Decimal(12, 2)
+  stock             Int           @default(0)
+  lowStockThreshold Int?
+  status            ProductStatus @default(ACTIVE)
+  featured          Boolean       @default(false)
+  categoryId        String
+  brandId           String?
+  // Admin Product Management upgrade — additive only. tags uses Postgres's
+  // native array type (no join table needed for a simple flat tag list —
+  // there is no shared/reusable-tag entity anywhere else in this schema to
+  // justify one). seoTitle/seoDescription are optional overrides only:
+  // product/[slug]/page.tsx's generateMetadata() falls back to
+  // name/description when either is unset, so every existing product's
+  // metadata is byte-for-byte unchanged until an admin opts in.
+  tags              String[]      @default([])
+  seoTitle          String?
+  seoDescription    String?
+  // Short Description / Key Specifications upgrade — replaces the
+  // former structured ProductSpecification (label/value rows) system,
+  // which was admin-only friction (a "Label / Value / Add Specification"
+  // repeater) for something that was never actually rendered on the
+  // storefront. Plain freeform text, admin-authored, optional. Rendered
+  // via a whitespace-preserving safe text element (never
+  // dangerouslySetInnerHTML) — see product/[slug]/page.tsx.
+  shortDescription  String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  category Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  brand    Brand?         @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  images   ProductImage[]
+  reviews  Review[]
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([status])
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  url       String
+  altText   String?
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+// --- Business quotation requests (Phase 4.3.6) ---
+// src/app/(storefront)/business/quotation/page.tsx previously rendered a
+// client-only form with no backend at all ("Frontend-only demo submission
+// — no email/API/database call yet."). This model, plus the server action
+// that now backs that form, is what makes a submission a real, persisted
+// record for the first time. Every field here maps 1:1 to what that form
+// already collected — nothing was added beyond what the existing UI
+// actually asks a visitor for. No item/product relation exists because the
+// form has never supported selecting multiple structured line items (only
+// one free-text `requirement` + `quantity` pair per request) — inventing
+// one here would be adding structure the customer-facing flow doesn't have.
+// Submission is guest-friendly (userId is optional) because the form has
+// never required authentication; a logged-in visitor's session id is
+// attached automatically when available, purely for convenience.
+
+enum QuotationStatus {
+  PENDING
+  REVIEWED
+  RESPONDED
+  CLOSED
+}
+
+enum PreferredContact {
+  EMAIL
+  PHONE
+}
+
+model Quotation {
+  id                     String            @id @default(cuid())
+  userId                 String?
+  fullName               String
+  companyName            String
+  email                  String
+  phone                  String
+  requirement            String
+  quantity               Int
+  preferredContact       PreferredContact?
+  additionalRequirements String?
+  message                String
+  status                 QuotationStatus   @default(PENDING)
+  createdAt              DateTime          @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+}
+
+// --- Discounts / Coupons — Stage A (Phase 4.3.9) ---
+// Admin coupon management only. Deliberately has NO relation to Order,
+// OrderItem, or User, and nothing anywhere in the application increments
+// usageCount yet — checkout/cart integration is an explicitly separate,
+// not-yet-approved future phase (Stage B). No status field: "is this
+// coupon currently usable" is computed at read time from isActive +
+// startDate/endDate + usageCount vs usageLimit (see
+// src/lib/admin/coupon-status.ts), not stored, so it can never drift out
+// of sync with reality the way a stored enum would without a background
+// job.
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+model Coupon {
+  id                    String       @id @default(cuid())
+  code                  String       @unique
+  discountType          DiscountType
+  discountValue         Decimal      @db.Decimal(12, 2)
+  minimumOrderAmount    Decimal?     @db.Decimal(12, 2)
+  maximumDiscountAmount Decimal?     @db.Decimal(12, 2)
+  startDate             DateTime?
+  endDate               DateTime?
+  usageLimit            Int?
+  usageCount            Int          @default(0)
+  isActive              Boolean      @default(true)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+}
+
+// --- Login rate limiting (Phase 4.4.1) ---
+// Tracks failed Credentials-provider login attempts per normalized email,
+// enforced inside src/auth.ts's authorize() — the single choke point every
+// credentials sign-in (the login form, signup's auto-sign-in, or any other
+// future caller) passes through. Deployment uses serverless Postgres
+// (Neon) with no shared in-memory store available across instances, so
+// this is DB-backed rather than an in-memory counter. Deliberately keyed
+// by the submitted email string, not User.id: a nonexistent account and a
+// real one accumulate failures identically, so this table can never be
+// used to probe whether an email has an account. No relation to User — a
+// row can (and often will) exist for an email with no matching account.
+model LoginAttempt {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  failedCount  Int       @default(0)
+  lastFailedAt DateTime?
+  lockedUntil  DateTime?
+  updatedAt    DateTime  @updatedAt
+}
+
+// --- Product reviews (Phase 4.4.5) ---
+// Authenticated-only, one-per-customer-per-product content moderation.
+// Deliberately different from the historical-snapshot models elsewhere in
+// this schema (Order, OrderItem): a review has no reason to survive its
+// product's deletion the way a financial record must, so productId/userId
+// are real relations with onDelete: Cascade, not snapshotted strings — if
+// the product or the reviewer's account is ever removed, the review goes
+// with it. verifiedPurchase is the one field that IS a snapshot: computed
+// once at submission time from the customer's order history and never
+// recomputed later, so it can't silently drift if that order is later
+// cancelled. No updatedAt — event-log style like Quotation, immutable
+// content, only `status` ever changes after creation.
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Review {
+  id               String       @id @default(cuid())
+  productId        String
+  userId           String
+  rating           Int
+  title            String?
+  body             String
+  status           ReviewStatus @default(PENDING)
+  verifiedPurchase Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, userId])
+  @@index([productId])
+  @@index([userId])
+  @@index([status])
+}
+
+// --- Admin activity / audit log (Phase 4.4.7) ---
+// A chronological record of successful admin business mutations only —
+// never customer/storefront activity, never login events (LoginAttempt,
+// Phase 4.4.1, remains the sole login-security mechanism), never a debug
+// log. View-only from the application's perspective: no update/delete
+// Server Action is ever built against this table in this phase.
+//
+// admin uses onDelete: Restrict, matching the exact precedent already set
+// by Product.category — the same "prevent removing a still-referenced
+// row" behavior, not a new convention. There is no account-deletion
+// feature anywhere in this app today, so this FK is currently unreachable
+// in practice, but the choice is deliberate: an audit record must never
+// silently disappear (or cascade-delete) if an admin account is ever
+// removed in the future.
+enum ActivityAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  ROLE_CHANGE
+}
+
+model ActivityLog {
+  id          String         @id @default(cuid())
+  adminId     String
+  action      ActivityAction
+  entityType  String
+  entityId    String
+  description String
+  metadata    Json?
+  createdAt   DateTime       @default(now())
+
+  admin User @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// --- Admin store settings (Phase 4.4.8) ---
+// A deliberate singleton, not a generic key/value table — see the Phase
+// 4.4.8 audit for the full type-safety/validation/querying rationale. The
+// fixed, literal @default id ("singleton") is what makes this a singleton
+// in practice: every reader/writer targets this exact, well-known id
+// rather than "the most recent row" or a separately-tracked pointer, so a
+// second row can never be created by accident and there is never any
+// ambiguity about which row is authoritative.
+//
+// Scope is intentionally narrow: only the store-facing values that were
+// already hardcoded constants before this phase (see src/lib/site-config.ts
+// and src/lib/coupon-checkout.ts) became configurable here. Currency is
+// deliberately NOT a field — it stays hardcoded PKR (src/lib/utils.ts) to
+// avoid historical-accounting ambiguity. No secrets, API keys, or
+// infrastructure configuration belong in this model, ever — those remain
+// in environment/secret management, unchanged from today.
+model StoreSettings {
+  id           String   @id @default("singleton")
+  storeName    String   @default("i.Link Systems & Solutions")
+  phone        String   @default("0331 8852808")
+  email        String   @default("ilink.isb@gmail.com")
+  hours        String   @default("Mon – Sat, 10:00 AM – 8:00 PM")
+  // Flat, store-wide shipping cost — the only shipping model this
+  // application has ever had (see the Phase 4.4.8 audit: no zones, no
+  // free-shipping threshold, no courier selection exist anywhere in the
+  // code). Decimal, never Float, matching every other money column in
+  // this schema (Product.price, Order.subtotal/total, Coupon.discountValue,
+  // etc.).
+  shippingCost Decimal  @default(0) @db.Decimal(12, 2)
+
+  // Manual Easypaisa payment settings (Phase 4.4.14) — all optional and
+  // unset by default; nothing is pre-filled with real or placeholder
+  // account details. easypaisaQrCode is a plain image path/URL, matching
+  // Category.image/Brand.logoUrl/Banner.image exactly — no upload system,
+  // no media library. Checkout must render gracefully whether any/all of
+  // these are configured (see src/app/(storefront)/checkout/page.tsx).
+  easypaisaAccountName  String?
+  easypaisaNumber       String?
+  easypaisaQrCode       String?
+  easypaisaInstructions String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// --- Contact form messages (Phase 4.4.9) ---
+// The storefront contact form (src/components/sections/contact-form.tsx)
+// previously had no backend at all ("Frontend-only demo submission — no
+// email/API/database call yet."), exactly mirroring Quotation's situation
+// before Phase 4.3.6. This model follows that same precedent: guest-
+// submittable (no userId/User relation at all — the form has never
+// required authentication, and unlike Quotation there is no "attach the
+// logged-in visitor's session for convenience" behavior to preserve here
+// either, since nothing in the current contact form or admin design calls
+// for it), triage-only status (no assignment, no notes, no email-reply
+// functionality — this is not a ticketing/CRM system).
+enum ContactMessageStatus {
+  NEW
+  READ
+  RESOLVED
+}
+
+model ContactMessage {
+  id        String               @id @default(cuid())
+  name      String
+  email     String
+  // Nullable — the contact form has always labeled this "Phone (optional)"
+  // and never required it (confirmed by reading contact-form.tsx directly,
+  // unlike Quotation's phone field, which the quotation form does require).
+  phone     String?
+  subject   String
+  message   String
+  status    ContactMessageStatus @default(NEW)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// --- Newsletter subscriptions (Phase 4.4.11) ---
+// The homepage newsletter form (src/components/sections/newsletter.tsx)
+// previously had no backend at all (its submit handler only ever set local
+// component state). Deliberately the smallest possible shape: no status —
+// there is no email-sending infrastructure anywhere in this project for a
+// status to meaningfully gate, so introducing one now would be a stored
+// value with no functional consumer, exactly what Phase 4.4.8's audit
+// warned against for currency. No userId/User relation — subscribing has
+// never required an account, matching Quotation and ContactMessage's own
+// guest-first precedent. No updatedAt — nothing on this row is ever
+// mutated after creation (mirrors Quotation, which also has no updatedAt
+// despite its own mutable status; here there's not even a status to
+// justify one).
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// --- Homepage banners (Phase 4.4.13) ---
+// The homepage Hero carousel (src/components/sections/hero.tsx) previously
+// sourced its slides from a hardcoded, in-file TypeScript array. This model
+// is the deliberately minimal database-backed replacement: only what the
+// existing Hero component actually renders. The three-part
+// lead/highlight/tail headline the static data used is intentionally
+// collapsed into a single `title` string — no rich-text/JSON field, no
+// React/JSX stored in the database (see Hero's own updated rendering logic
+// for how a single string is adapted back into the existing visual
+// treatment). `trustPoints`, `mobileImage`, and `contentWidthClass` are
+// deliberately NOT admin-managed fields — they were presentation-only
+// details of the old static data with no repository evidence justifying a
+// database column. No startDate/endDate: nothing in the storefront checks
+// a date window, and adding the columns without matching query logic would
+// be dead weight (see the Phase 4.4.12 audit). isActive Boolean mirrors
+// Coupon's already-proven active/inactive pattern — no new status enum.
+// image/imageAlt are plain strings, matching Category.image/Brand.logoUrl/
+// ProductImage.url exactly — no media library, no upload system.
+model Banner {
+  id                String   @id @default(cuid())
+  image             String
+  imageAlt          String
+  category          String
+  title             String
+  description       String
+  primaryCtaLabel   String
+  primaryCtaHref    String
+  secondaryCtaLabel String
+  secondaryCtaHref  String
+  sortOrder         Int      @default(0)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@index([sortOrder])
+}
+
+// --- Returns / RMA (Phase 4.4.18) ---
+// Gives the storefront's public 7-day return/exchange policy (see
+// src/components/sections/faq.tsx) actual system backing. This is
+// deliberately a REQUEST record only — it does not represent a completed
+// return, an exchange fulfillment, or a refund. Kept as a wholly separate,
+// additive domain model rather than overloading Order: OrderStatus and
+// PaymentStatus stay exactly as they are (no RETURNED value, no new
+// transitions), and approving a request never touches Order.total,
+// Order.paymentMethod, Order.items, or triggers refundOrder — a refund
+// remains an entirely separate, manually-triggered admin decision using
+// the existing Phase 4.4.15 workflow. onDelete: Restrict on both relations
+// (not Cascade, unlike OrderItem) mirrors ActivityLog's own precedent: a
+// return request is a historical record that must never silently vanish
+// if the order or user account it references is ever removed — currently
+// unreachable in practice since neither Order nor User is ever deleted
+// anywhere in this app, exactly like ActivityLog's own documented
+// rationale. No item-level structure (no ReturnRequestItem) — the request
+// is against the order as a whole, matching Quotation's own precedent of
+// a single free-text field over invented structure. No requestType
+// (RETURN vs EXCHANGE) column — the free-text reason lets the customer
+// state which they want, exactly like Quotation's own free-text
+// `requirement` field; adding a second parallel structured field for the
+// same information would be dead weight. rejectionReason is admin-only,
+// written only by the reject transition, shown back to the customer so
+// they understand why — never containing anything sensitive.
+enum ReturnStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ReturnRequest {
+  id              String       @id @default(cuid())
+  orderId         String
+  userId          String
+  reason          String
+  status          ReturnStatus @default(PENDING)
+  rejectionReason String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+}
+
+// Phase 4.4.26 — a small, generic, DB-backed rate limiter for public forms
+// (signup, contact, newsletter, business quotation, review submission).
+// Deliberately separate from LoginAttempt (which stays fully untouched —
+// its failure-streak/lockout model is specific to brute-force login
+// protection, not a general request-throttle) and modeled after its own
+// precedent: this deployment runs on serverless Postgres with no shared
+// in-memory store across instances/executions, so only a DB-backed
+// tracker enforces a limit consistently everywhere, the same reasoning
+// login-rate-limit.ts already documents for itself.
+//
+// `key` is a namespaced string the caller constructs (e.g.
+// "signup:203.0.113.4" or "review:cln_someUserId") — generic on purpose,
+// so one small table serves every form rather than one bespoke table per
+// form. Rows are simply counted within a sliding window (see
+// src/lib/rate-limit.ts); nothing here enforces atomicity beyond what a
+// single indexed query naturally provides — the same accepted,
+// best-effort precision LoginAttempt's own comments describe for the
+// same class of problem (a request-volume throttle, not a hard security
+// boundary like payment/inventory math elsewhere in this project).
+model RateLimitAttempt {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
