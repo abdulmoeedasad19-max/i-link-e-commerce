@@ -20,9 +20,11 @@ const categorySchema = z.object({
   image: z.string().trim().optional(),
   icon: z.string().trim().optional(),
   tier: z.enum(["FEATURED", "SECONDARY", "COMPACT"], { message: "Please select a valid tier." }),
+  seoTitle: z.string().trim().max(60, "SEO Title should not exceed 60 characters.").optional().or(z.literal("")),
+  seoDescription: z.string().trim().max(160, "SEO Description should not exceed 160 characters.").optional().or(z.literal("")),
 });
 
-type CategoryFormField = "name" | "slug" | "description" | "image" | "icon" | "tier" | "form";
+type CategoryFormField = "name" | "slug" | "description" | "image" | "icon" | "tier" | "seoTitle" | "seoDescription" | "form";
 
 export type CategoryActionState = {
   errors?: Partial<Record<CategoryFormField, string>>;
@@ -59,6 +61,8 @@ function readFormValues(formData: FormData) {
     image: formData.get("image") || undefined,
     icon: formData.get("icon") || undefined,
     tier: formData.get("tier"),
+    seoTitle: formData.get("seoTitle") || undefined,
+    seoDescription: formData.get("seoDescription") || undefined,
   };
 }
 
@@ -101,6 +105,8 @@ export async function createCategory(
           image: data.image ?? null,
           icon: data.icon ?? null,
           tier: data.tier,
+          seoTitle: data.seoTitle ?? null,
+          seoDescription: data.seoDescription ?? null,
           sortOrder: nextSortOrder,
         },
         select: { id: true },
@@ -174,6 +180,8 @@ export async function updateCategory(
           image: data.image ?? null,
           icon: data.icon ?? null,
           tier: data.tier,
+          seoTitle: data.seoTitle ?? null,
+          seoDescription: data.seoDescription ?? null,
         },
       });
       await logActivity(tx, {

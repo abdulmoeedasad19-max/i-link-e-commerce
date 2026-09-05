@@ -10,6 +10,9 @@ export type AdminBrandListItem = {
   name: string;
   slug: string;
   logoUrl: string | null;
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   productCount: number;
 };
 
@@ -54,5 +57,14 @@ export async function getAdminBrands(params: { search?: string; page?: number })
 export async function getAdminBrandById(id: string): Promise<AdminBrandListItem | null> {
   const row = await db.brand.findUnique({ where: { id }, include: WITH_PRODUCT_COUNT });
   if (!row) return null;
-  return { id: row.id, name: row.name, slug: row.slug, logoUrl: row.logoUrl, productCount: row._count.products };
+  return { 
+    id: row.id, 
+    name: row.name, 
+    slug: row.slug, 
+    logoUrl: row.logoUrl, 
+    description: row.description,
+    seoTitle: row.seoTitle,
+    seoDescription: row.seoDescription,
+    productCount: row._count.products 
+  };
 }

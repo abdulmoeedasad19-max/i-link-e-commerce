@@ -4,7 +4,13 @@ import Container from "@/components/ui/container";
 import SectionHeading from "@/components/ui/section-heading";
 import BlogCard from "@/components/sections/blog-card";
 import { cn } from "@/lib/utils";
-import { getAllPosts, getAllCategories, getFeaturedPosts, getPostsByCategory } from "@/lib/blog";
+import {
+  getPublishedPosts,
+  getFeaturedPosts,
+  getPostsByCategory,
+  getAllPublishedCategories,
+} from "@/lib/blog-repository";
+import type { RepositoryBlogPost } from "@/lib/blog-repository";
 
 type BlogPageProps = {
   searchParams: Promise<{ category?: string | string[] }>;
@@ -21,7 +27,6 @@ export async function generateMetadata({ searchParams }: BlogPageProps): Promise
     return {
       title: `${category} Articles`,
       description: `Articles and guides about ${category.toLowerCase()} from i.Link Systems & Solutions.`,
-      // Category-filtered views are a subset of /blog, not a distinct page worth indexing separately.
       robots: { index: false, follow: true },
     };
   }
@@ -38,10 +43,13 @@ export async function generateMetadata({ searchParams }: BlogPageProps): Promise
 
 export default async function BlogPage({ searchParams }: BlogPageProps) {
   const category = resolveCategory((await searchParams).category);
-  const categories = getAllCategories();
+  const categories = await getAllPublishedCategories();
 
-  const posts = category ? getPostsByCategory(category) : getAllPosts();
-  const featured = category ? null : getFeaturedPosts()[0];
+  const posts: RepositoryBlogPost[] = category
+    ? await getPostsByCategory(category)
+    : await getPublishedPosts();
+  const featuredPosts = category ? [] : await getFeaturedPosts();
+  const featured = featuredPosts[0] ?? null;
   const gridPosts = featured ? posts.filter((p) => p.slug !== featured.slug) : posts;
 
   return (

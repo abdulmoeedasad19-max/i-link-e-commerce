@@ -38,6 +38,8 @@ export type RepositoryCategory = {
   href: string;
   icon: string;
   description: string;
+  seoTitle: string | null;
+  seoDescription: string | null;
   image: string;
   tier: CategoryTierDisplay;
 };
@@ -53,6 +55,8 @@ function toCategory(row: {
   slug: string;
   icon: string | null;
   description: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
   image: string | null;
   tier: DbCategoryTier;
 }): RepositoryCategory {
@@ -63,6 +67,8 @@ function toCategory(row: {
     href: `/shop/${row.slug}`,
     icon: row.icon ?? "",
     description: row.description ?? "",
+    seoTitle: row.seoTitle ?? null,
+    seoDescription: row.seoDescription ?? null,
     image: row.image ?? "",
     tier: TIER_DISPLAY[row.tier],
   };

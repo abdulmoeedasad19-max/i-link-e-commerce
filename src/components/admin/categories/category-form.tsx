@@ -103,6 +103,43 @@ export default function CategoryForm({
       </div>
 
       <div className="rounded-2xl border border-light-gray bg-white p-5 premium-shadow sm:p-6">
+        <h2 className="text-base font-bold text-navy">SEO Metadata</h2>
+        <div className="mt-4 space-y-4">
+          <Field id="category-seoTitle" label="SEO Title" error={errors.seoTitle}>
+            <input
+              type="text"
+              id="category-seoTitle"
+              name="seoTitle"
+              defaultValue={category?.seoTitle ?? undefined}
+              placeholder="Buy Laptops in Pakistan | i.Link Systems"
+              aria-invalid={Boolean(errors.seoTitle)}
+              className={inputClass(Boolean(errors.seoTitle))}
+              maxLength={60}
+            />
+            <p className="mt-1.5 text-xs text-slate">
+              Maximum 60 characters. Leave blank to use the category name.
+            </p>
+          </Field>
+
+          <Field id="category-seoDescription" label="SEO Description" error={errors.seoDescription}>
+            <textarea
+              id="category-seoDescription"
+              name="seoDescription"
+              rows={2}
+              defaultValue={category?.seoDescription ?? undefined}
+              placeholder="Shop laptops in Pakistan from trusted brands including HP, Dell and Lenovo. Explore business, gaming and professional laptops at i.Link Systems."
+              aria-invalid={Boolean(errors.seoDescription)}
+              className={inputClass(Boolean(errors.seoDescription))}
+              maxLength={160}
+            />
+            <p className="mt-1.5 text-xs text-slate">
+              Maximum 160 characters. Leave blank to use the standard description.
+            </p>
+          </Field>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-light-gray bg-white p-5 premium-shadow sm:p-6">
         <h2 className="text-base font-bold text-navy">Display</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field id="category-tier" label="Tier" required error={errors.tier}>

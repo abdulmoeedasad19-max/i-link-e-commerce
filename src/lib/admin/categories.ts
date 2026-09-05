@@ -22,6 +22,8 @@ export type AdminCategoryListItem = {
 
 export type AdminCategoryDetail = AdminCategoryListItem & {
   description: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
 };
 
 const WITH_PRODUCT_COUNT = { _count: { select: { products: true } } } satisfies Prisma.CategoryInclude;
@@ -78,6 +80,8 @@ export async function getAdminCategoryById(id: string): Promise<AdminCategoryDet
     name: row.name,
     slug: row.slug,
     description: row.description,
+    seoTitle: row.seoTitle,
+    seoDescription: row.seoDescription,
     image: row.image,
     icon: row.icon,
     tier: row.tier,

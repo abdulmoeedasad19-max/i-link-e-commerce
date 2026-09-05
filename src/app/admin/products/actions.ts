@@ -378,6 +378,22 @@ export async function updateProduct(
           featured: data.featured,
         },
       });
+
+      // Phase 1: Product Slug SEO Redirect System
+      if (existing.slug !== data.slug) {
+        // If the new slug was previously an old redirect, clear it to prevent conflict
+        await tx.productRedirect.deleteMany({
+          where: { oldSlug: data.slug },
+        });
+
+        // Save the old slug pointing to this product
+        await tx.productRedirect.upsert({
+          where: { oldSlug: existing.slug },
+          create: { oldSlug: existing.slug, productId: id },
+          update: { productId: id },
+        });
+      }
+
       // Images are managed exclusively by the dedicated actions in
       // src/app/admin/products/[id]/edit/image-actions.ts — this action
       // never touches that relation, so a basic-info save can never lose

@@ -19,6 +19,7 @@ import {
   Mail,
   Rss,
   Undo2,
+  PenLine,
 } from "lucide-react";
 
 export type AdminNavIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -72,6 +73,12 @@ export const adminNavSections: AdminNavSection[] = [
   {
     title: "Inventory",
     items: [{ label: "Inventory", href: "/admin/inventory", icon: Boxes }],
+  },
+  {
+    title: "Content",
+    items: [
+      { label: "Blog Posts", href: "/admin/blog", icon: PenLine },
+    ],
   },
   {
     title: "Marketing",

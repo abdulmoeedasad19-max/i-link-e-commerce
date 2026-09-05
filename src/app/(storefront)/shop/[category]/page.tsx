@@ -4,13 +4,19 @@ import { PackageSearch } from "lucide-react";
 import Container from "@/components/ui/container";
 import SectionHeading from "@/components/ui/section-heading";
 import ProductCard from "@/components/sections/product-card";
+import Pagination from "@/components/ui/pagination";
 import { getProductsByCategory } from "@/lib/products-repository";
 import { getCategoryBySlug, getAllCategories } from "@/lib/categories-repository";
-import { shopMegaMenu, footerLinks } from "@/lib/site-config";
+import { shopMegaMenu, footerLinks, siteConfig } from "@/lib/site-config";
+import { safeJsonLd } from "@/lib/utils";
+
+const CATEGORY_PAGE_SIZE = 24;
 
 type CategoryDisplay = {
   name: string;
   description: string;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
 };
 
 /**
@@ -29,6 +35,8 @@ async function resolveCategory(slug: string): Promise<CategoryDisplay | undefine
     return {
       name: dbCategory.name,
       description: dbCategory.description || `Browse our ${dbCategory.name.toLowerCase()} range.`,
+      seoTitle: dbCategory.seoTitle,
+      seoDescription: dbCategory.seoDescription,
     };
   }
 
@@ -79,8 +87,10 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ category: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }): Promise<Metadata> {
   const { category: slug } = await params;
   const category = await resolveCategory(slug);
@@ -89,17 +99,26 @@ export async function generateMetadata({
     return { title: "Category Not Found" };
   }
 
+  const resolvedSearchParams = await searchParams;
+  const pageParam = resolvedSearchParams.page;
+  const parsedPage = typeof pageParam === "string" ? parseInt(pageParam, 10) : 1;
+  const page = !isNaN(parsedPage) && parsedPage > 1 ? parsedPage : 1;
+
+  const canonicalPath = page > 1 ? `/shop/${slug}?page=${page}` : `/shop/${slug}`;
+
   return {
-    title: category.name,
-    description: category.description,
-    alternates: { canonical: `/shop/${slug}` },
+    title: category.seoTitle || category.name,
+    description: category.seoDescription || category.description,
+    alternates: { canonical: canonicalPath },
   };
 }
 
 export default async function CategoryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ category: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { category: slug } = await params;
   const category = await resolveCategory(slug);
@@ -108,19 +127,78 @@ export default async function CategoryPage({
     notFound();
   }
 
-  const products = await getProductsByCategory(slug);
+  const resolvedSearchParams = await searchParams;
+  const pageParam = resolvedSearchParams.page;
+  let page = typeof pageParam === "string" ? parseInt(pageParam, 10) : 1;
+  if (isNaN(page) || page < 1) page = 1;
+
+  const { products, total } = await getProductsByCategory(slug, page, CATEGORY_PAGE_SIZE);
+  
+  // Safe bounds handling: If page is beyond available products, cap it at totalPages
+  // Wait, if we cap it and query again, that's a second query. Or we just show empty results, 
+  // but standard SEO practice for beyond-range is to 404 or just show empty. Let's just show empty 
+  // or clamp during UI generation. We queried with `page`. If it returns 0 products but page > 1, 
+  // it shows the empty state.
+  const totalPages = Math.ceil(total / CATEGORY_PAGE_SIZE);
+
+  const canonicalPath = page > 1 ? `/shop/${slug}?page=${page}` : `/shop/${slug}`;
+  const canonicalUrl = `${siteConfig.url}${canonicalPath}`;
+  const collectionJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: category.seoTitle || category.name,
+    description: category.seoDescription || category.description,
+    url: canonicalUrl,
+    ...(products.length > 0 && {
+      mainEntity: {
+        "@type": "ItemList",
+        itemListElement: products.map((product, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          item: {
+            "@type": "Product",
+            name: product.name,
+            url: `${siteConfig.url}/product/${product.slug}`,
+            image: `${siteConfig.url}${product.image}`,
+            ...(product.sku ? { sku: product.sku } : {}),
+            ...(product.brand ? { brand: { "@type": "Brand", name: product.brand } } : {}),
+            offers: {
+              "@type": "Offer",
+              url: `${siteConfig.url}/product/${product.slug}`,
+              priceCurrency: "PKR",
+              price: String(product.price),
+              availability: product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+              itemCondition: "https://schema.org/NewCondition",
+            }
+          }
+        }))
+      }
+    })
+  };
 
   return (
     <div className="py-20 sm:py-24">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(collectionJsonLd) }}
+      />
       <Container>
         <SectionHeading as="h1" eyebrow="Shop" title={category.name} description={category.description} />
 
         {products.length > 0 ? (
-          <div className="mt-12 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <>
+            <div className="mt-12 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+              {products.map((product, index) => (
+                <ProductCard key={product.id} product={product} priority={index < 4} />
+              ))}
+            </div>
+            
+            <Pagination 
+              currentPage={page} 
+              totalPages={totalPages} 
+              baseHref={`/shop/${slug}`} 
+            />
+          </>
         ) : (
           <div className="mx-auto mt-12 flex max-w-md flex-col items-center rounded-2xl border border-light-gray bg-soft-gray px-6 py-16 text-center">
             <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-royal/10 text-royal">

@@ -23,6 +23,9 @@ export type RepositoryBrand = {
    * mismatches the static config had (e.g. brand slug "wd" vs the
    * static config's asset-derived slug "westerndigital"). */
   logoUrl: string | null;
+  description: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
 };
 
 function wrapError(context: string, error: unknown): Error {
@@ -34,7 +37,15 @@ function wrapError(context: string, error: unknown): Error {
 export async function getAllBrands(): Promise<RepositoryBrand[]> {
   try {
     const rows = await db.brand.findMany({ orderBy: { name: "asc" } });
-    return rows.map((b) => ({ id: b.id, name: b.name, slug: b.slug, logoUrl: b.logoUrl }));
+    return rows.map((b) => ({ 
+      id: b.id, 
+      name: b.name, 
+      slug: b.slug, 
+      logoUrl: b.logoUrl,
+      description: b.description,
+      seoTitle: b.seoTitle,
+      seoDescription: b.seoDescription,
+    }));
   } catch (error) {
     throw wrapError("getAllBrands failed", error);
   }
@@ -48,4 +59,22 @@ export type RepositoryBrandWithLogo = RepositoryBrand & { logoUrl: string };
 export async function getBrandsWithLogo(): Promise<RepositoryBrandWithLogo[]> {
   const all = await getAllBrands();
   return all.filter((b): b is RepositoryBrandWithLogo => Boolean(b.logoUrl));
+}
+
+export async function getBrandBySlug(slug: string): Promise<RepositoryBrand | null> {
+  try {
+    const row = await db.brand.findUnique({ where: { slug } });
+    if (!row) return null;
+    return { 
+      id: row.id, 
+      name: row.name, 
+      slug: row.slug, 
+      logoUrl: row.logoUrl,
+      description: row.description,
+      seoTitle: row.seoTitle,
+      seoDescription: row.seoDescription,
+    };
+  } catch (error) {
+    throw wrapError(`getBrandBySlug("${slug}") failed`, error);
+  }
 }

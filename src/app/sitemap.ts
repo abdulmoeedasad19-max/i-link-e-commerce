@@ -2,7 +2,8 @@ import type { MetadataRoute } from "next";
 import { siteConfig } from "@/lib/site-config";
 import { getAllProducts } from "@/lib/products-repository";
 import { getAllCategories } from "@/lib/categories-repository";
-import { getAllPosts } from "@/lib/blog";
+import { getAllBrands } from "@/lib/brands-repository";
+import { getPublishedPostSlugs } from "@/lib/blog-repository";
 
 // sitemap.js is cached by default (no Request-time API is used below), so
 // without this a newly created/activated product would only appear in
@@ -58,9 +59,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   }));
 
-  const blogRoutes: MetadataRoute.Sitemap = getAllPosts().map((post) => ({
+  const brandRoutes: MetadataRoute.Sitemap = (await getAllBrands()).map((brand) => ({
+    url: `${base}/brands/${brand.slug}`,
+    changeFrequency: "weekly",
+    priority: 0.6,
+  }));
+
+  const blogRoutes: MetadataRoute.Sitemap = (await getPublishedPostSlugs()).map((post) => ({
     url: `${base}/blog/${post.slug}`,
-    lastModified: post.updatedAt ?? post.publishedAt,
+    lastModified: post.updatedAt,
     changeFrequency: "monthly",
     priority: 0.6,
   }));
@@ -68,5 +75,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Intentionally excluded: /cart, /wishlist, /login, /signup, /search,
   // /business/quotation — private, user-specific, or noindexed pages that
   // don't belong in a sitemap.
-  return [...staticRoutes, ...categoryRoutes, ...productRoutes, ...blogRoutes];
+  return [...staticRoutes, ...categoryRoutes, ...brandRoutes, ...productRoutes, ...blogRoutes];
 }

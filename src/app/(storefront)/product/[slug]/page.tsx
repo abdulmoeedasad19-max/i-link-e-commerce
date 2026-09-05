@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
 import Container from "@/components/ui/container";
 import Badge from "@/components/ui/badge";
@@ -8,8 +8,9 @@ import ProductActions from "@/components/sections/product-actions";
 import ProductReviews from "@/components/sections/product-reviews";
 import ProductImageGallery from "@/components/sections/product-image-gallery";
 import ProductDetailTabs from "@/components/sections/product-detail-tabs";
+import RelatedProducts from "@/components/sections/related-products";
 import { formatPrice, safeJsonLd } from "@/lib/utils";
-import { getAllProducts, getProductBySlug } from "@/lib/products-repository";
+import { getAllProducts, getProductBySlug, getProductRedirect } from "@/lib/products-repository";
 import { getProductRatingSummary } from "@/lib/reviews";
 import { siteConfig } from "@/lib/site-config";
 
@@ -46,6 +47,10 @@ export async function generateMetadata({
   const product = await getProductBySlug(slug);
 
   if (!product) {
+    const redirectSlug = await getProductRedirect(slug);
+    if (redirectSlug) {
+      permanentRedirect(`/product/${redirectSlug}`);
+    }
     return { title: "Product Not Found" };
   }
 
@@ -88,6 +93,10 @@ export default async function ProductPage({
   const product = await getProductBySlug(slug);
 
   if (!product) {
+    const redirectSlug = await getProductRedirect(slug);
+    if (redirectSlug) {
+      permanentRedirect(`/product/${redirectSlug}`);
+    }
     notFound();
   }
 
@@ -275,6 +284,12 @@ export default async function ProductPage({
           description={<p className="max-w-3xl leading-relaxed text-slate">{product.description}</p>}
           reviews={<ProductReviews productSlug={product.slug} />}
           reviewCount={ratingSummary.reviewCount}
+        />
+
+        <RelatedProducts 
+          productId={product.id} 
+          categoryId={product.categoryId} 
+          brandId={product.brandId} 
         />
       </Container>
     </div>

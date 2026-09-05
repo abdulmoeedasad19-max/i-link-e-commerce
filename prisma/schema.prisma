@@ -2,8 +2,9 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider      = "prisma-client"
+  output        = "../src/generated/prisma"
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -312,16 +313,18 @@ enum CategoryTier {
 }
 
 model Category {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique
-  description String?
-  image       String?
-  icon        String?
-  tier        CategoryTier @default(SECONDARY)
-  sortOrder   Int          @default(0)
-  parentId    String?
-  createdAt   DateTime     @default(now())
+  id              String       @id @default(cuid())
+  name            String
+  slug            String       @unique
+  description     String?
+  image           String?
+  icon            String?
+  tier            CategoryTier @default(SECONDARY)
+  sortOrder       Int          @default(0)
+  parentId        String?
+  seoTitle        String?
+  seoDescription  String?
+  createdAt       DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
   parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
@@ -332,12 +335,15 @@ model Category {
 }
 
 model Brand {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  logoUrl   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  logoUrl         String?
+  description     String?
+  seoTitle        String?
+  seoDescription  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   products Product[]
 }
@@ -381,10 +387,21 @@ model Product {
   brand    Brand?         @relation(fields: [brandId], references: [id], onDelete: SetNull)
   images   ProductImage[]
   reviews  Review[]
+  redirects ProductRedirect[]
 
   @@index([categoryId])
   @@index([brandId])
   @@index([status])
+}
+
+model ProductRedirect {
+  oldSlug   String   @id
+  productId String
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
 }
 
 model ProductImage {
@@ -792,4 +809,41 @@ model RateLimitAttempt {
   createdAt DateTime @default(now())
 
   @@index([key, createdAt])
+}
+
+// --- BLOG CMS ---
+
+model BlogPost {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  title            String
+  excerpt          String
+  content          Json
+  image            String
+  imageAlt         String
+  author           String
+  category         String
+  featured         Boolean  @default(false)
+  readTime         String
+  seoTitle         String?
+  seoDescription   String?
+  keywords         String[]
+  relatedCategories String[]
+
+  status           String   @default("DRAFT")
+  publishedAt      DateTime?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  redirects        BlogPostRedirect[]
+
+  @@index([status])
+  @@index([publishedAt])
+}
+
+model BlogPostRedirect {
+  oldSlug String @id
+  postId  String
+  post    BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
 }

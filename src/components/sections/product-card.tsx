@@ -11,7 +11,13 @@ import type { Product } from "@/lib/products";
 // legacy caller simply renders without the discount strikethrough.
 type ProductCardProps = Product & { compareAtPrice?: number | null };
 
-export default function ProductCard({ product }: { product: ProductCardProps }) {
+export default function ProductCard({ 
+  product, 
+  priority = false 
+}: { 
+  product: ProductCardProps;
+  priority?: boolean;
+}) {
   const inStock = product.stock > 0;
   const hasDiscount = product.compareAtPrice != null && product.compareAtPrice > product.price;
 
@@ -25,6 +31,7 @@ export default function ProductCard({ product }: { product: ProductCardProps }) 
           src={product.image}
           alt={product.name}
           fill
+          priority={priority}
           quality={75}
           sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
           className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"

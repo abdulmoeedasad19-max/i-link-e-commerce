@@ -73,6 +73,54 @@ export default function BrandForm({ mode, brand }: { mode: "create" | "edit"; br
               className={inputClass(Boolean(errors.logoUrl))}
             />
           </Field>
+          
+          <Field id="brand-description" label="Description" error={errors.description}>
+            <textarea
+              id="brand-description"
+              name="description"
+              rows={3}
+              defaultValue={brand?.description ?? undefined}
+              aria-invalid={Boolean(errors.description)}
+              className={inputClass(Boolean(errors.description))}
+            />
+          </Field>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-light-gray bg-white p-5 premium-shadow sm:p-6">
+        <h2 className="text-base font-bold text-navy">SEO Metadata</h2>
+        <div className="mt-4 space-y-4">
+          <Field id="brand-seoTitle" label="SEO Title" error={errors.seoTitle}>
+            <input
+              type="text"
+              id="brand-seoTitle"
+              name="seoTitle"
+              defaultValue={brand?.seoTitle ?? undefined}
+              placeholder="Dell Laptops & Computers in Pakistan | i.Link Systems"
+              aria-invalid={Boolean(errors.seoTitle)}
+              className={inputClass(Boolean(errors.seoTitle))}
+              maxLength={60}
+            />
+            <p className="mt-1.5 text-xs text-slate">
+              Maximum 60 characters. Leave blank to use the brand name.
+            </p>
+          </Field>
+
+          <Field id="brand-seoDescription" label="SEO Description" error={errors.seoDescription}>
+            <textarea
+              id="brand-seoDescription"
+              name="seoDescription"
+              rows={2}
+              defaultValue={brand?.seoDescription ?? undefined}
+              placeholder="Shop Dell laptops and computers in Pakistan at i.Link Systems. Explore Dell business, professional and performance systems available online."
+              aria-invalid={Boolean(errors.seoDescription)}
+              className={inputClass(Boolean(errors.seoDescription))}
+              maxLength={160}
+            />
+            <p className="mt-1.5 text-xs text-slate">
+              Maximum 160 characters. Leave blank to use the standard description.
+            </p>
+          </Field>
         </div>
       </div>
 

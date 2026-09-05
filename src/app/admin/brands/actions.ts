@@ -17,9 +17,12 @@ const brandSchema = z.object({
     .max(100, "Slug is too long.")
     .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Slug can only contain lowercase letters, numbers and hyphens."),
   logoUrl: z.string().trim().optional(),
+  description: z.string().trim().optional(),
+  seoTitle: z.string().trim().max(60, "SEO Title should not exceed 60 characters.").optional().or(z.literal("")),
+  seoDescription: z.string().trim().max(160, "SEO Description should not exceed 160 characters.").optional().or(z.literal("")),
 });
 
-type BrandFormField = "name" | "slug" | "logoUrl" | "form";
+type BrandFormField = "name" | "slug" | "logoUrl" | "description" | "seoTitle" | "seoDescription" | "form";
 
 export type BrandActionState = {
   errors?: Partial<Record<BrandFormField, string>>;
@@ -65,6 +68,9 @@ export async function createBrand(_prevState: BrandActionState, formData: FormDa
     name: formData.get("name"),
     slug: slugCandidate,
     logoUrl: formData.get("logoUrl") || undefined,
+    description: formData.get("description") || undefined,
+    seoTitle: formData.get("seoTitle") || undefined,
+    seoDescription: formData.get("seoDescription") || undefined,
   });
   if (!parsed.success) {
     return { errors: collectZodErrors(parsed.error) };
@@ -79,7 +85,14 @@ export async function createBrand(_prevState: BrandActionState, formData: FormDa
   try {
     await db.$transaction(async (tx) => {
       const brand = await tx.brand.create({
-        data: { name: data.name, slug: data.slug, logoUrl: data.logoUrl ?? null },
+        data: {
+          name: data.name,
+          slug: data.slug,
+          logoUrl: data.logoUrl ?? null,
+          description: data.description ?? null,
+          seoTitle: data.seoTitle ?? null,
+          seoDescription: data.seoDescription ?? null,
+        },
         select: { id: true },
       });
       await logActivity(tx, {
@@ -117,6 +130,9 @@ export async function updateBrand(_prevState: BrandActionState, formData: FormDa
     name: formData.get("name"),
     slug: String(formData.get("slug") ?? "").trim(),
     logoUrl: formData.get("logoUrl") || undefined,
+    description: formData.get("description") || undefined,
+    seoTitle: formData.get("seoTitle") || undefined,
+    seoDescription: formData.get("seoDescription") || undefined,
   });
   if (!parsed.success) {
     return { errors: collectZodErrors(parsed.error) };
@@ -137,7 +153,14 @@ export async function updateBrand(_prevState: BrandActionState, formData: FormDa
     await db.$transaction(async (tx) => {
       await tx.brand.update({
         where: { id },
-        data: { name: data.name, slug: data.slug, logoUrl: data.logoUrl ?? null },
+        data: {
+          name: data.name,
+          slug: data.slug,
+          logoUrl: data.logoUrl ?? null,
+          description: data.description ?? null,
+          seoTitle: data.seoTitle ?? null,
+          seoDescription: data.seoDescription ?? null,
+        },
       });
       await logActivity(tx, {
         adminId: session.user.id,

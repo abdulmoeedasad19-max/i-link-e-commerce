@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import PolicyPage, { PolicyP } from "@/components/sections/policy-page";
 import { getAllBrands, type RepositoryBrandWithLogo } from "@/lib/brands-repository";
 import { brands as staticBrandNames } from "@/lib/site-config";
@@ -44,19 +45,19 @@ export default async function BrandsPage() {
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {withLogo.map((brand) => (
-          <div
+          <Link
             key={brand.id}
-            className="flex h-24 items-center justify-center rounded-2xl border border-light-gray bg-white p-4 premium-shadow"
+            href={`/brands/${brand.slug}`}
+            className="flex h-24 items-center justify-center rounded-2xl border border-light-gray bg-white p-4 premium-shadow hover:border-royal/50 hover:shadow-md transition-all"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- matches the existing brand-marquee.tsx convention for these fixed local SVG assets */}
-            <img
+            <Image
               src={brand.logoUrl}
               alt={`${brand.name} logo`}
-              loading="lazy"
-              decoding="async"
+              width={100}
+              height={100}
               className="h-8 w-auto object-contain"
             />
-          </div>
+          </Link>
         ))}
       </div>
 
@@ -65,12 +66,13 @@ export default async function BrandsPage() {
           <p className="text-sm font-bold text-navy">Also in our catalog</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {withoutLogo.map((brand) => (
-              <span
+              <Link
                 key={brand.id}
-                className="rounded-md border border-light-gray bg-white px-3 py-1.5 text-xs font-medium text-navy premium-shadow"
+                href={`/brands/${brand.slug}`}
+                className="rounded-md border border-light-gray bg-white px-3 py-1.5 text-xs font-medium text-navy premium-shadow hover:text-royal hover:border-royal/50 transition-colors"
               >
                 {brand.name}
-              </span>
+              </Link>
             ))}
           </div>
         </div>

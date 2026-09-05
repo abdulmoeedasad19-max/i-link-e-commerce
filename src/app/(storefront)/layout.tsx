@@ -5,6 +5,7 @@ import Footer from "@/components/layout/footer";
 import Providers from "@/contexts/providers";
 import { inter } from "@/lib/fonts";
 import { safeJsonLd } from "@/lib/utils";
+import { WhatsAppButton } from "@/components/ui/whatsapp-button";
 import "../globals.css";
 
 const siteUrl = "https://www.ilinksystems.com";
@@ -130,6 +131,7 @@ export default function StorefrontRootLayout({ children }: { children: ReactNode
           </main>
           <Footer />
         </Providers>
+        <WhatsAppButton />
       </body>
     </html>
   );

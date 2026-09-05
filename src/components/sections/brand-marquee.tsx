@@ -1,3 +1,4 @@
+import Image from "next/image";
 import SectionHeading from "@/components/ui/section-heading";
 import { getBrandsWithLogo } from "@/lib/brands-repository";
 
@@ -32,22 +33,22 @@ export default async function BrandMarquee() {
         >
           {brandLogos.map((brand) => (
             <li key={brand.id} className="shrink-0">
-              <img
-                src={brand.logoUrl}
+              <Image
+                src={brand.logoUrl!}
                 alt={`${brand.name} logo`}
-                loading="lazy"
-                decoding="async"
+                width={100}
+                height={100}
                 className="h-7 w-auto cursor-pointer object-contain opacity-75 transition-all duration-300 ease-out hover:scale-[1.08] hover:opacity-100 sm:h-8 lg:h-9"
               />
             </li>
           ))}
           {brandLogos.map((brand) => (
             <li key={`${brand.id}-dup`} className="shrink-0" aria-hidden="true">
-              <img
-                src={brand.logoUrl}
+              <Image
+                src={brand.logoUrl!}
                 alt=""
-                loading="lazy"
-                decoding="async"
+                width={100}
+                height={100}
                 className="h-7 w-auto cursor-pointer object-contain opacity-75 transition-all duration-300 ease-out hover:scale-[1.08] hover:opacity-100 sm:h-8 lg:h-9"
               />
             </li>

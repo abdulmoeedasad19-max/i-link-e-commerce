@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { Calendar, ChevronRight, Clock, Home } from "lucide-react";
 import Container from "@/components/ui/container";
 import Badge from "@/components/ui/badge";
 import BlogCard from "@/components/sections/blog-card";
 import RichText from "@/components/sections/rich-text";
-import { getAllPosts, getPostBySlug, getRelatedPosts } from "@/lib/blog";
+import {
+  getPublishedPostBySlug,
+  getBlogPostRedirect,
+  getRelatedPosts,
+  getPublishedPosts,
+} from "@/lib/blog-repository";
+import type { ContentBlock } from "@/lib/blog";
 import { siteConfig } from "@/lib/site-config";
 import { safeJsonLd } from "@/lib/utils";
 
@@ -23,13 +29,14 @@ function formatDate(dateString: string) {
   });
 }
 
-export function generateStaticParams() {
-  return getAllPosts().map((p) => ({ slug: p.slug }));
+export async function generateStaticParams() {
+  const posts = await getPublishedPosts();
+  return posts.map((p) => ({ slug: p.slug }));
 }
 
 export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getPublishedPostBySlug(slug);
 
   if (!post) {
     return { title: "Article Not Found" };
@@ -38,26 +45,26 @@ export async function generateMetadata({ params }: ArticlePageProps): Promise<Me
   const canonicalPath = `/blog/${post.slug}`;
 
   return {
-    title: post.seoTitle,
-    description: post.seoDescription,
+    title: post.seoTitle || post.title,
+    description: post.seoDescription || post.excerpt,
     keywords: post.keywords,
     alternates: {
       canonical: canonicalPath,
     },
     openGraph: {
       type: "article",
-      title: post.seoTitle,
-      description: post.seoDescription,
+      title: post.seoTitle || post.title,
+      description: post.seoDescription || post.excerpt,
       url: canonicalPath,
-      publishedTime: post.publishedAt,
-      modifiedTime: post.updatedAt ?? post.publishedAt,
+      publishedTime: post.publishedAt ?? undefined,
+      modifiedTime: post.updatedAt ?? post.publishedAt ?? undefined,
       authors: [post.author],
       images: [{ url: post.image, alt: post.imageAlt }],
     },
     twitter: {
       card: "summary_large_image",
-      title: post.seoTitle,
-      description: post.seoDescription,
+      title: post.seoTitle || post.title,
+      description: post.seoDescription || post.excerpt,
       images: [post.image],
     },
   };
@@ -65,21 +72,27 @@ export async function generateMetadata({ params }: ArticlePageProps): Promise<Me
 
 export default async function ArticlePage({ params }: ArticlePageProps) {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getPublishedPostBySlug(slug);
 
   if (!post) {
+    // Check for redirect
+    const newSlug = await getBlogPostRedirect(slug);
+    if (newSlug) {
+      permanentRedirect(`/blog/${newSlug}`);
+    }
     notFound();
   }
 
-  const related = getRelatedPosts(post.slug, 3);
+  const related = await getRelatedPosts(post.slug, 3);
   const canonicalUrl = `${siteConfig.url}/blog/${post.slug}`;
-  const faqBlock = post.content.find((block) => block.type === "faq");
+  const contentBlocks = post.content as ContentBlock[];
+  const faqBlock = contentBlocks.find((block) => block.type === "faq");
 
   const articleJsonLd = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     headline: post.title,
-    description: post.seoDescription,
+    description: post.seoDescription || post.excerpt,
     image: `${siteConfig.url}${post.image}`,
     author: {
       "@type": "Organization",
@@ -164,11 +177,13 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
           <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-light-gray py-4 text-sm text-slate">
             <span className="font-semibold text-navy">By {post.author}</span>
-            <span className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4" aria-hidden="true" />
-              Published {formatDate(post.publishedAt)}
-            </span>
-            {post.updatedAt && (
+            {post.publishedAt && (
+              <span className="flex items-center gap-1.5">
+                <Calendar className="h-4 w-4" aria-hidden="true" />
+                Published {formatDate(post.publishedAt)}
+              </span>
+            )}
+            {post.updatedAt && post.updatedAt !== post.publishedAt && (
               <span className="flex items-center gap-1.5">
                 <Calendar className="h-4 w-4" aria-hidden="true" />
                 Updated {formatDate(post.updatedAt)}
@@ -196,7 +211,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
         {/* Article content */}
         <article className="mx-auto mt-10 max-w-3xl">
-          <RichText blocks={post.content} />
+          <RichText blocks={contentBlocks} />
         </article>
 
         {/* Related articles */}

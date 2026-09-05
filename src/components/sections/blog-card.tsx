@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, Calendar, Clock } from "lucide-react";
 import Badge from "@/components/ui/badge";
-import type { BlogPost } from "@/lib/blog";
+import type { RepositoryBlogPost } from "@/lib/blog-repository";
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -12,7 +12,7 @@ function formatDate(dateString: string) {
   });
 }
 
-export default function BlogCard({ post, priority = false }: { post: BlogPost; priority?: boolean }) {
+export default function BlogCard({ post, priority = false }: { post: RepositoryBlogPost; priority?: boolean }) {
   return (
     <Link
       href={`/blog/${post.slug}`}
@@ -40,10 +40,12 @@ export default function BlogCard({ post, priority = false }: { post: BlogPost; p
         <p className="mt-2 line-clamp-2 flex-1 text-sm leading-relaxed text-slate">{post.excerpt}</p>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate">
-          <span className="flex items-center gap-1.5">
-            <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-            {formatDate(post.publishedAt)}
-          </span>
+          {post.publishedAt && (
+            <span className="flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+              {formatDate(post.publishedAt)}
+            </span>
+          )}
           <span className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />
             {post.readTime}
